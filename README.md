@@ -1,2 +1,10 @@
-# expenses-tracker
-Expenses Tracker
+# Expenses Tracker
+
+
+## Set up
+- .env file
+- create db
+
+
+
+
