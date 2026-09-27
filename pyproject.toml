@@ -8,5 +8,6 @@ dependencies = [
     "django>=6.1.1",
     "environs>=15.2.0",
     "gunicorn>=26.2.0",
+    "huey>=3.4.0",
     "openai>=3.19.2",
 ]
