@@ -26,6 +26,7 @@ DEBUG = env.bool("DEBUG")
 
 ALLOWED_HOSTS = [h for h in env.list("ALLOWED_HOSTS", delimiter=",") if h != ""]
 
+CSRF_TRUSTED_ORIGINS = [url for url in env.list("CSRF_TRUSTED_ORIGINS", delimiter=",") if url != ""]
 
 # Application definition
 
@@ -36,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "tracking",
 ]
 
 MIDDLEWARE = [
@@ -128,6 +130,46 @@ MAILERS = {
 # Nebius API key
 NEBIUS_API_KEY = env.str("NEBIUS_API_KEY")
 
+# Model used for inference
+# https://docs.nebius.com/studio/inference/models
+#     On 08.10.2026, I got the following models:
+# ['moonshotai/Kimi-K3',
+#  'Qwen/Qwen3-235B-A22B-Instruct-2507',
+#  'google/gemma-3-27b-it',
+#  'Qwen/Qwen3-Embedding-8B',
+#  'openai/gpt-oss-120b',
+#  'Qwen/Qwen3-30B-A3B-Instruct-2507',
+#  'NousResearch/Hermes-4-405B',
+#  'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+#  'zai-org/GLM-5.1',
+#  'nvidia/Nemotron-3_5-Lightning',
+#  'openbmb/MiniCPM-V-4_5',
+#  'Qwen/Qwen3.8-27B',
+#  'deepseek-ai/DeepSeek-V4-Flash-0731',
+#  'MiniMaxAI/MiniMax-M3',
+#  'moonshotai/Kimi-K2.7-Code',
+#  'nvidia/Nemotron-3-Ultra-550b-a55b',
+#  'moonshotai/Kimi-K2.6',
+#  'nvidia/nemotron-3-super-120b-a12b',
+#  'Qwen/Qwen3.5-397B-A17B',
+#  'deepseek-ai/DeepSeek-V4-Pro',
+#  'zai-org/GLM-5.2',
+#  'zai-org/GLM-5.3-Flash',
+#  'deepseek-ai/DeepSeek-V4.1-Flash',
+#  'zai-org/GLM-5.3',
+#  'deepseek-ai/DeepSeek-V4-Pro-0813']
+NEBIUS_TEXT_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+# Vision-capable model (from the list above) used to read expense photos
+NEBIUS_VISION_MODEL_ID = "openbmb/MiniCPM-V-4_5"
+
+
+# telegram 
+TELEGRAM_BOT_API_KEY = env("TELEGRAM_BOT_API_KEY")
+# Random string sent by Telegram in the X-Telegram-Bot-Api-Secret-Token header
+TELEGRAM_WEBHOOK_SECRET_TOKEN = env.str("TELEGRAM_WEBHOOK_SECRET_TOKEN", "")
+
+# Public base URL (e.g. https://example.com)
+BASE_WEB_URL = env.str("BASE_WEB_URL")
 
 # HTTPS
 HTTPS = env.bool("HTTPS")
