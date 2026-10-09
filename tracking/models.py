@@ -50,6 +50,8 @@ class TelegramUser(models.Model):
     # Set when a user has asked to delete their data and must confirm first.
     pending_delete = models.BooleanField(default=False)
 
+    update_id = models.BigIntegerField(unique=True, null=True, blank=True)
+
     def __str__(self):
         if self.username:
             return f"@{self.username}"

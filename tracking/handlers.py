@@ -8,6 +8,7 @@ import openai
 from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
+from django.db import IntegrityError
 
 from tracking.models import Expense, ExpenseCategory, OnboardingStep, TelegramUser
 from tracking.tasks import format_spendings_report
@@ -424,6 +425,12 @@ def _reply_with_expense(update, telegram_user, parse_expense, *args):
     if not chat_id:
         return
 
+    # Fast path: a retried delivery is already in the DB — skip the expensive
+    # AI call and don't re-send a confirmation.
+    update_id = update.get("update_id")
+    if update_id is not None and Expense.objects.filter(update_id=update_id).exists():
+        return
+
     expense_summary = None
 
     try:
@@ -500,11 +507,22 @@ def _parse_expense_date(value) -> date:
         raise ValueError(f"invalid date {value!r}") from exc
 
 
-def _save_expense(expense: dict, telegram_user: TelegramUser, update: dict) -> Expense:
-    """Store the expense against an already-resolved TelegramUser."""
-    return Expense.objects.create(
-        telegram_user=telegram_user, telegram_update=update, **expense
-    )
+def _save_expense(expense, telegram_user, update):
+    """Store the expense against an already-resolved TelegramUser.
+
+    Returns the saved Expense, or ``None`` if this update was already
+    processed (a duplicate delivery from Telegram).
+    """
+    try:
+        return Expense.objects.create(
+            telegram_user=telegram_user,
+            telegram_update=update,
+            update_id=update.get("update_id"),
+            **expense,
+        )
+    except IntegrityError:
+        logger.info("Ignoring duplicate Telegram update %s", update.get("update_id"))
+        return None
 
 
 def photo_data_url(message: dict) -> str | None:
