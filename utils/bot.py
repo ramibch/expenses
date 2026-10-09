@@ -11,7 +11,8 @@ class Bot:
 
     @staticmethod
     def prepare():
-        ssl._create_default_https_context = ssl._create_unverified_context
+        pass
+        # ssl._create_default_https_context = ssl._create_unverified_context
 
     @staticmethod
     def to_chat(chat_id: int | str, text: str):
