@@ -4,6 +4,8 @@ import requests
 from django.conf import settings
 from django.urls import reverse
 
+from utils.timing import timed
+
 
 class Bot:
     base_url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_API_KEY}/"
@@ -23,7 +25,8 @@ class Bot:
             "text": text,
             "disable_web_page_preview": True,
         }
-        response = requests.get(Bot.base_url + "sendMessage", params=params)
+        with timed("telegram_send"):
+            response = requests.get(Bot.base_url + "sendMessage", params=params)
         return response.json()
 
     @staticmethod
@@ -42,14 +45,16 @@ class Bot:
 
         https://core.telegram.org/bots/api#getfile
         """
-        r = requests.get(Bot.base_url + "getFile", params={"file_id": file_id})
+        with timed("telegram_get_file"):
+            r = requests.get(Bot.base_url + "getFile", params={"file_id": file_id})
         return r.json()
 
     @staticmethod
     def download_file(file_path: str) -> bytes:
         """Download the raw bytes of a ``file_path`` returned by :meth:`get_file`."""
-        r = requests.get(Bot.file_url + file_path)
-        r.raise_for_status()
+        with timed("telegram_download"):
+            r = requests.get(Bot.file_url + file_path)
+            r.raise_for_status()
         return r.content
 
     @staticmethod

@@ -3,7 +3,7 @@ import json
 from django.contrib import admin
 from django.utils.html import format_html
 
-from tracking.models import Expense, TelegramUser
+from tracking.models import Expense, RequestTrace, StepTiming, TelegramUser
 
 
 @admin.register(TelegramUser)
@@ -63,3 +63,29 @@ class ExpenseAdmin(admin.ModelAdmin):
             "<pre>{}</pre>",
             json.dumps(obj.telegram_update, indent=2, ensure_ascii=False),
         )
+
+
+class StepTimingInline(admin.TabularInline):
+    model = StepTiming
+    extra = 0
+    can_delete = False
+    fields = ("order", "name", "duration_ms")
+    readonly_fields = ("order", "name", "duration_ms")
+    ordering = ("order", "id")
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RequestTrace)
+class RequestTraceAdmin(admin.ModelAdmin):
+    """Read-only view of per-update timings, with each step shown inline."""
+
+    list_display = ("id", "kind", "telegram_user", "update_id", "total_ms", "created_at")
+    list_filter = ("kind", ("created_at", admin.DateFieldListFilter))
+    search_fields = ("update_id", "telegram_user__username", "telegram_user__id")
+    date_hierarchy = "created_at"
+    ordering = ("-created_at",)
+    list_select_related = ("telegram_user",)
+    readonly_fields = ("update_id", "telegram_user", "kind", "total_ms", "created_at")
+    inlines = (StepTimingInline,)

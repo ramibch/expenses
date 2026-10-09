@@ -122,4 +122,57 @@ class Expense(models.Model):
     name = models.CharField(max_length=256)
     category = models.CharField(max_length=64, choices=ExpenseCategory.choices)
     telegram_update = models.JSONField()
+    # Telegram's update_id, globally unique per bot; makes webhook processing
+    # idempotent under Telegram's redelivery/retries.
     update_id = models.BigIntegerField(unique=True, null=True, blank=True)
+
+
+class RequestTrace(models.Model):
+    """Timing for one processed Telegram update.
+
+    One row per webhook update; the time spent in each step is stored on the
+    related :class:`StepTiming` rows. This makes it obvious where the bot is
+    slow (usually the model call, but now it's measurable rather than guessed).
+    """
+
+    class Kind(models.TextChoices):
+        TEXT = "text", "Text expense"
+        PHOTO = "photo", "Photo expense"
+        COMMAND = "command", "Command"
+        ONBOARDING = "onboarding", "Onboarding"
+        IGNORED = "ignored", "Ignored / other"
+
+    update_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    telegram_user = models.ForeignKey(
+        TelegramUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="traces",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices, blank=True)
+    total_ms = models.FloatField(default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"#{self.pk} {self.kind or 'request'} ({self.total_ms:.0f} ms)"
+
+
+class StepTiming(models.Model):
+    """A single measured step inside a :class:`RequestTrace`."""
+
+    trace = models.ForeignKey(
+        RequestTrace, related_name="steps", on_delete=models.CASCADE
+    )
+    order = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=64)
+    duration_ms = models.FloatField()
+
+    class Meta:
+        ordering = ("order", "id")
+
+    def __str__(self):
+        return f"{self.name}: {self.duration_ms:.1f} ms"

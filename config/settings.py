@@ -215,6 +215,11 @@ HUEY = {
 }
 
 
+# Timing instrumentation: store per-step durations in RequestTrace/StepTiming.
+# Set to false in production to skip the extra DB writes on every update.
+TRACK_TIMING = env.bool("TRACK_TIMING", True)
+
+
 # Public base URL (e.g. https://example.com)
 BASE_WEB_URL = env.str("BASE_WEB_URL")
 

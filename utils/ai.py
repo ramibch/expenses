@@ -8,6 +8,8 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
 )
 
+from utils.timing import timed
+
 # Nebius Token Factory exposes an OpenAI-compatible API.
 BASE_URL = "https://api.tokenfactory.nebius.com/v1/"
 
@@ -62,10 +64,11 @@ def get_response_to_prompt(
         {"role": "user", "content": content},
     ]
 
-    response = client.chat.completions.create(
-        model=model_id,
-        messages=messages,
-    )
+    with timed("ai_call"):
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+        )
 
     reply = response.choices[0].message.content or ""
     if return_json:

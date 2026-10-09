@@ -6,14 +6,22 @@ from datetime import date, timedelta
 
 import openai
 from django.conf import settings
+from django.db import IntegrityError
 from django.db.models import Sum
 from django.utils import timezone
-from django.db import IntegrityError
 
-from tracking.models import Expense, ExpenseCategory, OnboardingStep, TelegramUser
+from tracking.models import (
+    Expense,
+    ExpenseCategory,
+    OnboardingStep,
+    RequestTrace,
+    StepTiming,
+    TelegramUser,
+)
 from tracking.tasks import format_spendings_report
 from utils.ai import get_response_to_prompt
 from utils.bot import Bot
+from utils.timing import start_timer, stop_timer, timed
 
 logger = logging.getLogger(__name__)
 
@@ -42,35 +50,90 @@ EXPENSE_SYSTEM_PROMPT = (
 
 
 def handle_update(update: dict) -> None:
-    """React to a single Telegram Update delivered to the webhook."""
+    """React to a single Telegram Update delivered to the webhook.
+
+    When ``TRACK_TIMING`` is on, wraps the handling in a timer and stores the
+    per-step durations as a :class:`RequestTrace`.
+    """
+    if not getattr(settings, "TRACK_TIMING", False):
+        _handle_update(update)
+        return
+
+    timer, token = start_timer()
+    telegram_user: TelegramUser | None = None
+    kind = RequestTrace.Kind.IGNORED
+    try:
+        telegram_user, kind = _handle_update(update)
+    finally:
+        stop_timer(token)
+        _save_trace(update, telegram_user, kind, timer)
+
+
+def _handle_update(update: dict) -> tuple[TelegramUser | None, str]:
+    """Dispatch one update and report what was handled, for timing purposes."""
     message = update.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
 
     if not chat_id:
-        return
+        return None, RequestTrace.Kind.IGNORED
 
-    telegram_user, _ = _upsert_telegram_user(message)
+    with timed("upsert_user"):
+        telegram_user, _ = _upsert_telegram_user(message)
     text = (message.get("text") or "").strip()
 
     if text.startswith("/"):
-        handle_user_command(text, chat_id, message, telegram_user)
-        return
+        with timed("command"):
+            handle_user_command(text, chat_id, message, telegram_user)
+        return telegram_user, RequestTrace.Kind.COMMAND
 
     # Messages are only actionable once a user has finished onboarding. Unknown
     # senders (no `from`, or a bot) are ignored, and a user still in onboarding is
     # walked through it first. Either way, expenses are only processed for users
     # who completed onboarding.
-    if telegram_user is None or telegram_user.onboarding_step != OnboardingStep.DONE:
-        if telegram_user is not None:
+    if telegram_user is None:
+        return None, RequestTrace.Kind.IGNORED
+    if telegram_user.onboarding_step != OnboardingStep.DONE:
+        with timed("onboarding"):
             answer_onboarding(telegram_user, chat_id, message)
-        return
+        return telegram_user, RequestTrace.Kind.ONBOARDING
 
     if text.lower() == "ping":
         Bot.to_chat(chat_id, "pong")
-    elif message.get("photo"):
+        return telegram_user, RequestTrace.Kind.IGNORED
+    if message.get("photo"):
         reply_with_photo_expense(update, telegram_user)
-    elif _looks_like_expense(text):
+        return telegram_user, RequestTrace.Kind.PHOTO
+    if _looks_like_expense(text):
         reply_with_expense(update, telegram_user)
+        return telegram_user, RequestTrace.Kind.TEXT
+    return telegram_user, RequestTrace.Kind.IGNORED
+
+
+def _save_trace(
+    update: dict,
+    telegram_user: TelegramUser | None,
+    kind: str,
+    timer,
+) -> None:
+    """Persist the timing trace for a processed update (best effort only)."""
+    try:
+        user_id = telegram_user.pk if telegram_user is not None else None
+        if user_id is not None and not TelegramUser.objects.filter(pk=user_id).exists():
+            # e.g. the user just deleted their data (cascade removed the row).
+            user_id = None
+
+        trace = RequestTrace.objects.create(
+            update_id=update.get("update_id"),
+            telegram_user_id=user_id,
+            kind=kind,
+            total_ms=timer.total_ms(),
+        )
+        StepTiming.objects.bulk_create(
+            StepTiming(trace=trace, order=i, name=name, duration_ms=ms)
+            for i, (name, ms) in enumerate(timer.steps)
+        )
+    except Exception:
+        logger.exception("Could not persist timing trace")
 
 
 def _upsert_telegram_user(message: dict) -> tuple[TelegramUser | None, bool]:
@@ -435,11 +498,12 @@ def _reply_with_expense(update, telegram_user, parse_expense, *args):
 
     try:
         default_currency = telegram_user.default_currency if telegram_user else None
-        expense = _clean_expense(
-            parse_expense(*args), default_currency=default_currency
-        )
+        raw_expense = parse_expense(*args)
+        with timed("validate"):
+            expense = _clean_expense(raw_expense, default_currency=default_currency)
         if telegram_user is not None:
-            _save_expense(expense, telegram_user, update)
+            with timed("save_expense"):
+                _save_expense(expense, telegram_user, update)
             expense_summary = (
                 f"✅ {expense['name']} — {expense['amount']} {expense['currency']}"
                 f" ({ExpenseCategory(expense['category']).label})"
