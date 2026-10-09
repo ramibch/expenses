@@ -13,11 +13,25 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 
 import redis
+import sentry_sdk
 from environs import Env
 
 # Env variables
 env = Env()
 env.read_env()
+
+
+# sentry
+
+SENTRY_DSN = env.str("SENTRY_DSN", "")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+    )
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

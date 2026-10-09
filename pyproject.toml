@@ -13,5 +13,6 @@ dependencies = [
     "openai>=3.19.2",
     "redis>=7.0.0",
     "requests>=2.34.2",
+    "sentry-sdk>=2.71.0",
     "whitenoise>=6.12.0",
 ]
