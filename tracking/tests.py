@@ -13,7 +13,6 @@ from django.utils import timezone
 from tracking.handlers import (
     _clean_expense,
     _looks_like_expense,
-    get_image_url,
     handle_text_expense,
     handle_update,
     photo_data_url,
@@ -326,31 +325,6 @@ class PhotoDataUrlTests(TestCase):
     def test_no_photo_returns_none(self):
         self.assertIsNone(photo_data_url({}))
 
-
-class GetImageUrlTests(TestCase):
-    @patch(
-        "tracking.handlers.Bot.get_file",
-        return_value={"ok": True, "result": {"file_path": "photos/file_0.jpg"}},
-    )
-    def test_returns_telegram_file_url_for_largest_photo(self, get_file):
-        update = {"message": {"photo": [{"file_id": "small"}, {"file_id": "large"}]}}
-
-        url = get_image_url(update)
-
-        assert url is not None
-        self.assertTrue(url.startswith("https://api.telegram.org/file/bot"))
-        self.assertTrue(url.endswith("/photos/file_0.jpg"))
-        get_file.assert_called_once_with("large")
-
-    def test_no_photo_returns_none(self):
-        self.assertIsNone(get_image_url({"message": {"text": "hi"}}))
-
-    @patch(
-        "tracking.handlers.Bot.get_file",
-        return_value={"ok": False, "description": "file is temporarily unavailable"},
-    )
-    def test_getfile_failure_returns_none(self, get_file):
-        self.assertIsNone(get_image_url({"message": {"photo": [{"file_id": "a"}]}}))
 
 
 class SpendingsReportTests(TestCase):

@@ -507,23 +507,6 @@ def _save_expense(expense: dict, telegram_user: TelegramUser, update: dict) -> E
     )
 
 
-def get_image_url(update: dict) -> str | None:
-    """Return a browser-openable image URL for a Telegram photo update.
-
-    Telegram sends no URL for a photo, only ``file_id``s. The largest size is
-    resolved via ``getFile`` to a ``file_path`` and turned into
-    ``https://api.telegram.org/file/bot<token>/<file_path>``. Returns ``None``
-    when the update has no photo or the file cannot be resolved.
-
-    Note: this URL embeds the bot token and expires (~1h). To hand an image to
-    a third-party vision API, prefer :func:`photo_data_url`.
-    """
-    file_path = _resolve_photo_file_path(update.get("message") or {})
-    if not file_path:
-        return None
-    return Bot.file_url + file_path
-
-
 def photo_data_url(message: dict) -> str | None:
     """Build a ``data:`` URL for a Telegram photo message.
 
