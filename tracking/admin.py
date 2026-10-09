@@ -15,9 +15,23 @@ class TelegramUserAdmin(admin.ModelAdmin):
         "last_name",
         "is_bot",
         "language_code",
+        "default_currency",
+        "daily_report",
+        "weekly_report",
+        "monthly_report",
+        "onboarding_step",
         "created_at",
     )
-    list_filter = ("is_bot", "language_code")
+    list_editable = ("daily_report", "weekly_report", "monthly_report")
+    list_filter = (
+        "is_bot",
+        "language_code",
+        "default_currency",
+        "onboarding_step",
+        "daily_report",
+        "weekly_report",
+        "monthly_report",
+    )
     search_fields = ("id", "username", "first_name", "last_name")
     ordering = ("-created_at",)
     date_hierarchy = "created_at"

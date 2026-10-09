@@ -14,7 +14,7 @@ class Bot:
         ssl._create_default_https_context = ssl._create_unverified_context
 
     @staticmethod
-    def to_chat(chat_id: str, text: str):
+    def to_chat(chat_id: int | str, text: str):
         """Send text message to a chat"""
         Bot.prepare()
         params = {

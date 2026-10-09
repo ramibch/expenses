@@ -1,6 +1,19 @@
 from django.db import models
 
 
+class OnboardingStep(models.TextChoices):
+    """Where a user stands in the interactive onboarding conversation.
+
+    ``DONE`` is also the field default so that users created outside the bot
+    flow (admin, migrations, imports) are treated as already onboarded.
+    """
+
+    WELCOME = "welcome", "Welcome"
+    CURRENCY = "currency", "Default currency"
+    REPORTING = "reporting", "Report preferences"
+    DONE = "done", "Done"
+
+
 class TelegramUser(models.Model):
     """A Telegram user, mirroring the ``from`` object of an update.
 
@@ -22,14 +35,23 @@ class TelegramUser(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        verbose_name = "bot user"
-        verbose_name_plural = "bot users"
+    daily_report = models.BooleanField(default=False)
+    weekly_report = models.BooleanField(default=True)
+    monthly_report = models.BooleanField(default=True)
+
+    # Currency used as a fallback when an expense does not state one.
+    default_currency = models.CharField(max_length=3, blank=True)
+    onboarding_step = models.CharField(
+        max_length=16,
+        choices=OnboardingStep.choices,
+        default=OnboardingStep.DONE,
+    )
 
     def __str__(self):
         if self.username:
             return f"@{self.username}"
         return f"{self.first_name} {self.last_name}".strip() or str(self.id)
+
 
 class ExpenseCategory(models.TextChoices):
     # Housing & Home

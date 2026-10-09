@@ -63,6 +63,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "tracking.context_processors.site_urls",
             ],
         },
     },
@@ -169,6 +170,13 @@ NEBIUS_VISION_MODEL_ID = "openbmb/MiniCPM-V-4_5"
 TELEGRAM_BOT_API_KEY = env.str("TELEGRAM_BOT_API_KEY")
 # Random string sent by Telegram in the X-Telegram-Bot-Api-Secret-Token header
 TELEGRAM_WEBHOOK_SECRET_TOKEN = env.str("TELEGRAM_WEBHOOK_SECRET_TOKEN")
+
+TELEGRAM_BOT_URL = env.str("TELEGRAM_BOT_URL")
+
+# Useful urls
+DEVELOPER_CONTACT_URL = "https://ramib.ch/contact"
+REPO_CODE_URL = "https://github.com/ramibch/expenses"
+
 
 # Public base URL (e.g. https://example.com)
 BASE_WEB_URL = env.str("BASE_WEB_URL")

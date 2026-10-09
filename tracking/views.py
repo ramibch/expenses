@@ -2,10 +2,16 @@ import json
 
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseForbidden
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .handlers import handle_update
+
+
+def home(request):
+    """Marketing landing page that funnels visitors into the Telegram bot."""
+    return render(request, "home.html")
 
 
 @csrf_exempt

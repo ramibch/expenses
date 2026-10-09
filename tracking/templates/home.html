@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  :root {
+    --brand: var(--pico-primary-background);
+    --brand-soft: color-mix(in srgb, var(--pico-primary-background) 12%, transparent);
+    --bubble-in: var(--pico-secondary-background);
+  }
+
+  .eyebrow {
+    display: inline-block;
+    margin: 0 0 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 6vw, 3.25rem);
+    line-height: 1.1;
+    margin-bottom: 0.75rem;
+  }
+
+  .hero .lead {
+    font-size: 1.15rem;
+    max-width: 44ch;
+  }
+
+  .hero .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+  }
+
+  .hero .cta-row a[role="button"] {
+    margin: 0;
+  }
+
+  .trust {
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+  }
+
+  /* Chat mock */
+  .chat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .bubble {
+    max-width: 85%;
+    margin: 0;
+    padding: 0.65rem 0.9rem;
+    border-radius: 1rem;
+    white-space: pre-wrap;
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+
+  .bubble--in {
+    align-self: flex-start;
+    background: var(--bubble-in);
+    border-bottom-left-radius: 0.25rem;
+  }
+
+  .bubble--out {
+    align-self: flex-end;
+    background: var(--brand-soft);
+    color: var(--pico-color);
+    border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+    border-bottom-right-radius: 0.25rem;
+  }
+
+  .bubble time {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--pico-muted-color);
+  }
+
+  /* Stats */
+  .stat {
+    text-align: center;
+  }
+
+  .stat strong {
+    display: block;
+    font-size: clamp(1.75rem, 5vw, 2.5rem);
+    line-height: 1;
+    color: var(--brand);
+  }
+
+  .stat span {
+    color: var(--pico-muted-color);
+    font-size: 0.95rem;
+  }
+
+  /* Report cards */
+  .report pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
+  }
+
+  .report header strong {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .steps li {
+    margin-bottom: 0.5rem;
+  }
+
+  section {
+    padding-block: clamp(2rem, 6vw, 3.5rem);
+  }
+
+  .cta-band {
+    border-radius: var(--pico-border-radius);
+    background: var(--brand-soft);
+    border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+    padding: clamp(1.5rem, 5vw, 3rem);
+    text-align: center;
+  }
+
+  .cta-band h2 {
+    margin-top: 0;
+  }
+
+  footer.muted {
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+    padding-block: 1.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="grid">
+    <div>
+      <p class="eyebrow">Telegram expense tracker</p>
+      <h1>Log an expense in 3 seconds — just text it.</h1>
+      <p class="lead">
+        Send <strong>“coffee 3.5”</strong> or a photo of your receipt. The bot files
+        it, picks the category, and sends you
+        <strong>daily, weekly and monthly reports</strong> automatically.
+      </p>
+      <div class="cta-row">
+        <a role="button" href="{{ bot_url }}">Start on Telegram — it's free</a>
+        <a role="button" class="secondary outline" href="#reports">See the reports</a>
+      </div>
+      <p class="trust">Works with any currency · Nothing to install · Unlimited expenses</p>
+    </div>
+
+    <div>
+      <article class="chat">
+        <p class="bubble bubble--out">
+          lunch 12.50
+          <time>09:41</time>
+        </p>
+        <p class="bubble bubble--in">
+          ✅ Dining &amp; Cafés — 12.5 EUR
+          <time>09:41</time>
+        </p>
+        <p class="bubble bubble--out">
+          📷 <em>[photo of a grocery receipt]</em>
+          <time>18:02</time>
+        </p>
+        <p class="bubble bubble--in">
+          ✅ Groceries — 30.0 EUR
+          <time>18:02</time>
+        </p>
+        <p class="bubble bubble--in">
+          <strong>Your spendings today was:</strong>
+
+              EUR
+              - Dining &amp; Cafés: 12.50
+              - Groceries: 30.00
+          <time>21:00</time>
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="grid">
+    <div class="stat">
+      <strong>~3 sec</strong>
+      <span>to record an expense</span>
+    </div>
+    <div class="stat">
+      <strong>0 apps</strong>
+      <span>to install</span>
+    </div>
+    <div class="stat">
+      <strong>100%</strong>
+      <span>of categorising done for you</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Stop losing hours to bookkeeping</h2>
+  <p>
+    Traditional trackers mean opening an app, picking a category, choosing a date and
+    typing an amount — the reason most people give up. Here you just type it like you'd
+    tell a friend, or snap the receipt, and the AI handles the rest.
+  </p>
+</section>
+
+<section id="reports">
+  <h2>Reports that land in your chat — automatically</h2>
+  <p>
+    Pick how often you want them. The bot sends a clean breakdown of your spendings,
+    grouped by currency and category.
+  </p>
+
+  <div class="grid">
+    <article class="report">
+      <header><strong>☀️ Daily</strong></header>
+      <p>Everything you spent <em>today</em>, every evening.</p>
+      <pre>Your spendings today was:
+
+    EUR
+    - Dining &amp; Cafés: 12.50
+    - Groceries: 30.00</pre>
+    </article>
+
+    <article class="report">
+      <header><strong>📅 Weekly</strong></header>
+      <p>Your running total from Monday.</p>
+      <pre>Your spendings this week was:
+
+    EUR
+    - Groceries: 84.20
+    - Fuel: 52.00
+    - Dining &amp; Cafés: 41.30</pre>
+    </article>
+
+    <article class="report">
+      <header><strong>🗓️ Monthly</strong></header>
+      <p>A full breakdown of <em>last month</em>.</p>
+      <pre>Your spendings last month was:
+
+    EUR
+    - Rent / Mortgage: 1200.00
+    - Groceries: 320.75
+    - Travel: 180.00
+
+    CHF
+    - Clothing &amp; Shoes: 45.00</pre>
+    </article>
+  </div>
+
+  <p class="trust">
+    Only reports with spending are sent, and you can switch any of them on or off.
+  </p>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li>
+      <strong>Start the bot and answer two questions.</strong> Pick your currency and
+      which reports you want.
+    </li>
+    <li>
+      <strong>Send expenses your way.</strong> Type “train ticket 4.80” or send a photo
+      of the receipt.
+    </li>
+    <li>
+      <strong>Get your reports.</strong> The bot totals everything and messages you on
+      your schedule.
+    </li>
+  </ol>
+  <div class="cta-row">
+    <a role="button" href="{{ bot_url }}">Open the bot and set it up</a>
+  </div>
+</section>
+
+<section>
+  <h2>Everything you'd expect — without the busywork</h2>
+  <div class="grid">
+    <article>
+      <h3>🧠 AI reads your words</h3>
+      <p>Natural messages become structured expenses.</p>
+    </article>
+    <article>
+      <h3>📷 Photo receipts</h3>
+      <p>Send a picture of a ticket and it's extracted for you.</p>
+    </article>
+    <article>
+      <h3>💱 Any currency</h3>
+      <p>EUR, CHF, USD — reports are grouped per currency.</p>
+    </article>
+    <article>
+      <h3>🏷️ Auto categories</h3>
+      <p>Groceries, Rent, Dining, Travel and more — sorted for you.</p>
+    </article>
+    <article>
+      <h3>🔒 Private by default</h3>
+      <p>Reports go to your private chat.</p>
+    </article>
+    <article>
+      <h3>🧩 Open source</h3>
+      <p>Inspect it or self-host it yourself.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <div class="cta-band">
+    <h2>Your next expense could be tracked in 3 seconds</h2>
+    <p>Send one message and let the reports do the rest.</p>
+    <a role="button" href="{{ bot_url }}">Start tracking free</a>
+  </div>
+</section>
+
+<footer class="muted">
+  <p>
+    Questions or feedback?
+    <a href="{{ contact_url }}">Get in touch</a> ·
+    <a href="{{ code_url }}">View the source on GitHub</a>
+  </p>
+</footer>
+
+{% endblock %}
