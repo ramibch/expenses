@@ -23,7 +23,11 @@ def telegram_webhook(request):
     if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != secret:
         return HttpResponseForbidden()
 
-    update = json.loads(request.body or b"{}")
+    try:
+        update = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return HttpResponse(status=400)
+    
     handle_update(update)
 
     # Telegram only needs a 2xx to consider the update delivered.
