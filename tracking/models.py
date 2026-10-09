@@ -48,9 +48,9 @@ class TelegramUser(models.Model):
     )
 
     # Set when a user has asked to delete their data and must confirm first.
-    pending_delete = models.BooleanField(default=False)
+    pending_delete = models.BooleanField(default=False)    
 
-    update_id = models.BigIntegerField(unique=True, null=True, blank=True)
+
 
     def __str__(self):
         if self.username:
@@ -122,3 +122,4 @@ class Expense(models.Model):
     name = models.CharField(max_length=256)
     category = models.CharField(max_length=64, choices=ExpenseCategory.choices)
     telegram_update = models.JSONField()
+    update_id = models.BigIntegerField(unique=True, null=True, blank=True)
