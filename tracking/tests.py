@@ -191,6 +191,15 @@ class CleanExpenseTests(TestCase):
 
         self.assertEqual(cleaned["currency"], "CHF")
 
+    def test_null_currency_falls_back_to_default(self):
+        # The model returns null when the message states no currency.
+        cleaned = _clean_expense(
+            {"name": "Coffee", "amount": 6, "currency": None},
+            default_currency="CHF",
+        )
+
+        self.assertEqual(cleaned["currency"], "CHF")
+
     def test_model_currency_wins_over_default(self):
         cleaned = _clean_expense(
             {"name": "X", "amount": 1, "currency": "usd"}, default_currency="EUR"
@@ -393,6 +402,9 @@ class SpendingsReportTests(TestCase):
         self.assertIn("    - Groceries: 30.00", text)
         self.assertIn("    CHF", text)
         self.assertIn("    - Clothing & Shoes: 45.00", text)
+        # Each currency header carries the total for that currency.
+        self.assertIn("    EUR — 45.00", text)
+        self.assertIn("    CHF — 45.00", text)
         # Currencies are alphabetical and categories go by descending total.
         self.assertLess(text.index("CHF"), text.index("EUR"))
         self.assertLess(text.index("Groceries"), text.index("Dining & Cafés"))
@@ -401,7 +413,7 @@ class SpendingsReportTests(TestCase):
     def test_daily_report_only_messages_users_with_spendings(self, to_chat):
         self._expense(self.user, 3.5)
 
-        task_daily_report_to_telegram_users()
+        task_daily_report_to_telegram_users.call_local()
 
         to_chat.assert_called_once()
         (chat_id, text), _ = to_chat.call_args
@@ -415,7 +427,7 @@ class SpendingsReportTests(TestCase):
         self._expense(self.user, 1, day=today)
         self._expense(self.user, 99, day=today - timedelta(days=30))
 
-        task_weekly_report_to_telegram_users()
+        task_weekly_report_to_telegram_users.call_local()
 
         text = to_chat.call_args.args[1]
         self.assertIn("Your spendings this week was:", text)
@@ -432,7 +444,7 @@ class SpendingsReportTests(TestCase):
         self._expense(self.user, 8, day=last_month_end)
         self._expense(self.user, 99, day=today)
 
-        task_monthly_report_to_telegram_users()
+        task_monthly_report_to_telegram_users.call_local()
 
         text = to_chat.call_args.args[1]
         self.assertIn("Your spendings last month was:", text)
@@ -445,7 +457,7 @@ class SpendingsReportTests(TestCase):
         self.user.save(update_fields=["daily_report"])
         self._expense(self.user, 3.5)
 
-        task_daily_report_to_telegram_users()
+        task_daily_report_to_telegram_users.call_local()
 
         to_chat.assert_not_called()
 
@@ -456,7 +468,7 @@ class SpendingsReportTests(TestCase):
         self.user.save(update_fields=["monthly_report"])
         self._expense(self.user, 7, day=last_month)
 
-        task_monthly_report_to_telegram_users()
+        task_monthly_report_to_telegram_users.call_local()
 
         to_chat.assert_not_called()
 
@@ -465,7 +477,7 @@ class SpendingsReportTests(TestCase):
         self._expense(self.user, 1)
         self._expense(self.other, 2)
 
-        task_daily_report_to_telegram_users()
+        task_daily_report_to_telegram_users.call_local()
 
         self.assertEqual(to_chat.call_count, 2)
 
@@ -636,3 +648,161 @@ class HomePageTests(TestCase):
         self.assertContains(response, "Weekly")
         self.assertContains(response, "Monthly")
         self.assertContains(response, "3 seconds")
+
+
+class DeleteDataCommandTests(TestCase):
+    def setUp(self):
+        self.user = TelegramUser.objects.create(
+            id=42, onboarding_step=OnboardingStep.DONE, default_currency="EUR"
+        )
+        for amount, name in ((3.5, "Coffee"), (12.0, "Lunch")):
+            Expense.objects.create(
+                telegram_user=self.user,
+                date=timezone.localdate(),
+                amount=amount,
+                currency="EUR",
+                name=name,
+                category=ExpenseCategory.DINING,
+                telegram_update={},
+            )
+
+    def _update(self, text):
+        return {
+            "message": {
+                "chat": {"id": 42},
+                "from": {"id": 42, "is_bot": False, "first_name": "Rami"},
+                "text": text,
+            }
+        }
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_deletedata_lists_expenses_and_asks_to_confirm(self, to_chat):
+        handle_update(self._update("/deletedata"))
+
+        text = to_chat.call_args.args[1]
+        self.assertIn("Coffee", text)
+        self.assertIn("Lunch", text)
+        self.assertIn("/dataconfirmdelete", text)
+        # Nothing is deleted until the user confirms.
+        self.assertTrue(TelegramUser.objects.get(id=42).pending_delete)
+        self.assertEqual(Expense.objects.count(), 2)
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_confirmdelete_deletes_all_data(self, to_chat):
+        TelegramUser.objects.filter(id=42).update(pending_delete=True)
+
+        handle_update(self._update("/dataconfirmdelete"))
+
+        self.assertFalse(TelegramUser.objects.filter(id=42).exists())
+        self.assertEqual(Expense.objects.count(), 0)
+        self.assertIn("Deleted 2", to_chat.call_args.args[1])
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_confirmdelete_without_request_keeps_data(self, to_chat):
+        handle_update(self._update("/dataconfirmdelete"))
+
+        self.assertTrue(TelegramUser.objects.filter(id=42).exists())
+        self.assertEqual(Expense.objects.count(), 2)
+        self.assertIn("Nothing to delete", to_chat.call_args.args[1])
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_cancel_keeps_data(self, to_chat):
+        TelegramUser.objects.filter(id=42).update(pending_delete=True)
+
+        handle_update(self._update("/datadeletecancel"))
+
+        self.assertFalse(TelegramUser.objects.get(id=42).pending_delete)
+        self.assertEqual(Expense.objects.count(), 2)
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_deletedata_with_no_expenses_does_not_arm_confirmation(self, to_chat):
+        Expense.objects.all().delete()
+
+        handle_update(self._update("/deletedata"))
+
+        self.assertFalse(TelegramUser.objects.get(id=42).pending_delete)
+        self.assertIn("no expenses", to_chat.call_args.args[1])
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_deletelastexpense_deletes_and_informs(self, to_chat):
+        handle_update(self._update("/deletelastexpense"))
+
+        # "Lunch" (id=2) was logged last, so it is the one removed.
+        self.assertEqual([e.name for e in Expense.objects.all()], ["Coffee"])
+        text = to_chat.call_args.args[1]
+        self.assertIn("Lunch", text)
+        self.assertIn("12.00 EUR", text)
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_deletelastexpense_with_no_expenses_informs(self, to_chat):
+        Expense.objects.all().delete()
+
+        handle_update(self._update("/deletelastexpense"))
+
+        self.assertIn("no expenses", to_chat.call_args.args[1])
+
+
+class ExpenseWindowCommandTests(TestCase):
+    def setUp(self):
+        self.user = TelegramUser.objects.create(
+            id=42, onboarding_step=OnboardingStep.DONE, default_currency="EUR"
+        )
+
+    def _expense(self, amount, days_ago):
+        Expense.objects.create(
+            telegram_user=self.user,
+            date=timezone.localdate() - timedelta(days=days_ago),
+            amount=amount,
+            currency="EUR",
+            name="Expense",
+            category=ExpenseCategory.DINING,
+            telegram_update={},
+        )
+
+    def _update(self, text):
+        return {
+            "message": {
+                "chat": {"id": 42},
+                "from": {"id": 42, "is_bot": False, "first_name": "Rami"},
+                "text": text,
+            }
+        }
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_expenses7d_covers_only_the_last_7_days(self, to_chat):
+        self._expense(1, days_ago=1)
+        self._expense(100, days_ago=20)
+
+        handle_update(self._update("/expenses7d"))
+
+        text = to_chat.call_args.args[1]
+        self.assertIn("Your spendings in the last 7 days was:", text)
+        self.assertIn("1.00", text)
+        self.assertNotIn("100.00", text)
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_expenses30d_includes_older_expenses(self, to_chat):
+        self._expense(1, days_ago=1)
+        self._expense(100, days_ago=20)
+
+        handle_update(self._update("/expenses30d"))
+
+        self.assertIn("101.00", to_chat.call_args.args[1])
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_expenseslast3m_uses_calendar_months(self, to_chat):
+        self._expense(5, days_ago=80)  # within 3 calendar months
+        self._expense(50, days_ago=200)  # outside the window
+
+        handle_update(self._update("/expenseslast3m"))
+
+        text = to_chat.call_args.args[1]
+        self.assertIn("Your spendings in the last 3 months was:", text)
+        self.assertIn("5.00", text)
+        self.assertNotIn("50.00", text)
+
+    @patch("tracking.handlers.Bot.to_chat")
+    def test_window_with_no_expenses_reports_none(self, to_chat):
+        handle_update(self._update("/expenses7d"))
+
+        self.assertIn("no expenses", to_chat.call_args.args[1])

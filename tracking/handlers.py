@@ -1,13 +1,16 @@
 import base64
+import calendar
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 
 import openai
 from django.conf import settings
+from django.db.models import Sum
 from django.utils import timezone
 
 from tracking.models import Expense, ExpenseCategory, OnboardingStep, TelegramUser
+from tracking.tasks import format_spendings_report
 from utils.ai import get_response_to_prompt
 from utils.bot import Bot
 
@@ -23,13 +26,17 @@ EXPENSE_SYSTEM_PROMPT = (
     '  "date": the date of the expense as "YYYY-MM-DD" (ISO 8601), '
     "or null when it is not stated,\n"
     '  "amount": the amount as a number, without a currency symbol (number),\n'
-    '  "currency": the ISO 4217 currency code, e.g. "EUR" (string),\n'
+    '  "currency": the ISO 4217 code of the currency stated in the message '
+    '(string), or null when the message does not state a currency. Never guess '
+    "or infer a currency,\n"
     '  "category": exactly one of the allowed values below, as a string '
     '(use "other" if none fit).\n'
     f"Today date is {date.today().isoformat()} (ISO 8601, YYYY-MM-DD).\n"
     f"Allowed category values: {', '.join(ExpenseCategory.values)}.\n"
     'Example: {"name": "Coffee", "date": "2026-10-08", "amount": 3.5, '
-    '"currency": "EUR", "category": "dining"}'
+    '"currency": "EUR", "category": "dining"}\n'
+    'Example with no stated currency: {"name": "Coffee", "date": null, '
+    '"amount": 6, "currency": null, "category": "dining"}'
 )
 
 
@@ -106,6 +113,172 @@ def handle_user_command(cmd, chat_id, message, telegram_user=None):
     match cmd.split()[0]:
         case "/start":
             start_onboarding(telegram_user, chat_id)
+        case "/deletedata":
+            ask_delete_confirmation(telegram_user, chat_id)
+        case "/dataconfirmdelete":
+            confirm_data_delete_all(telegram_user, chat_id)
+        case "/datadeletecancel":
+            cancel_data_delete(telegram_user, chat_id)
+        case "/deletelastexpense":
+            delete_last_expense(telegram_user, chat_id)
+
+        case "/expenseslast1y":
+            report_recent_expenses(
+                telegram_user, chat_id, "in the last year", months=12
+            )
+        case "/expenseslast6m":
+            report_recent_expenses(
+                telegram_user, chat_id, "in the last 6 months", months=6
+            )
+        case "/expenseslast3m":
+            report_recent_expenses(
+                telegram_user, chat_id, "in the last 3 months", months=3
+            )
+        case "/expenses30d":
+            report_recent_expenses(
+                telegram_user, chat_id, "in the last 30 days", days=30
+            )
+        case "/expenses7d":
+            report_recent_expenses(
+                telegram_user, chat_id, "in the last 7 days", days=7
+            )
+
+
+# Cap the number of expenses listed so the message stays within Telegram's limit.
+MAX_LISTED_EXPENSES = 50
+
+DELETE_CONFIRMATION_PROMPT = (
+    "⚠️ This permanently deletes all your expenses and settings.\n"
+    "Reply /dataconfirmdelete to delete everything, or /datadeletecancel to abort."
+)
+
+
+def ask_delete_confirmation(telegram_user, chat_id):
+    """List the user's expenses and ask them to confirm deleting everything."""
+    if telegram_user is None:
+        Bot.to_chat(chat_id, "I don't have any data for you yet.")
+        return
+
+    expenses = Expense.objects.filter(telegram_user=telegram_user).order_by(
+        "date", "id"
+    )
+    count = expenses.count()
+    if not count:
+        Bot.to_chat(chat_id, "You have no expenses to delete.")
+        return
+
+    telegram_user.pending_delete = True
+    telegram_user.save(update_fields=["pending_delete", "updated_at"])
+
+    Bot.to_chat(
+        chat_id,
+        f"Here are all your expenses ({count}):\n\n"
+        f"{format_expense_list(expenses)}\n\n"
+        f"{DELETE_CONFIRMATION_PROMPT}",
+    )
+
+
+def confirm_data_delete_all(telegram_user, chat_id):
+    """Delete all of the user's data, only if a deletion was requested first."""
+    if telegram_user is None or not telegram_user.pending_delete:
+        Bot.to_chat(chat_id, "Nothing to delete. Send /deletedata first.")
+        return
+
+    count = Expense.objects.filter(telegram_user=telegram_user).count()
+    # Deleting the user cascades to their expenses and clears the pending flag.
+    telegram_user.delete()
+    Bot.to_chat(
+        chat_id,
+        f"🗑️ Deleted {count} expenses and all your settings. "
+        "Send /start to begin again.",
+    )
+
+
+def cancel_data_delete(telegram_user, chat_id):
+    """Cancel a pending data deletion."""
+    if telegram_user is None or not telegram_user.pending_delete:
+        Bot.to_chat(chat_id, "Nothing to cancel.")
+        return
+
+    telegram_user.pending_delete = False
+    telegram_user.save(update_fields=["pending_delete", "updated_at"])
+    Bot.to_chat(chat_id, "Cancelled — your data is safe.")
+
+
+def format_expense_list(expenses) -> str:
+    """Format expenses as a numbered list, capped for Telegram's message limit."""
+    expenses = list(expenses)
+    shown = expenses[:MAX_LISTED_EXPENSES]
+    lines = [
+        f"{i}. {expense.date} — {expense.name}: {expense.amount:.2f} "
+        f"{expense.currency} ({ExpenseCategory(expense.category).label})"
+        for i, expense in enumerate(shown, start=1)
+    ]
+    remaining = len(expenses) - len(shown)
+    if remaining:
+        lines.append(f"… and {remaining} more")
+    return "\n".join(lines)
+
+
+def delete_last_expense(telegram_user, chat_id):
+    """Delete the user's most recently logged expense and confirm it."""
+    if telegram_user is None:
+        Bot.to_chat(chat_id, "I don't have any data for you yet.")
+        return
+
+    expense = Expense.objects.filter(telegram_user=telegram_user).order_by("id").last()
+    
+    if expense is None:
+        Bot.to_chat(chat_id, "You have no expenses to delete.")
+        return
+
+    summary = (
+        f"{expense.name} — {expense.amount:.2f} {expense.currency} "
+        f"({ExpenseCategory(expense.category).label})"
+    )
+    expense.delete()
+    Bot.to_chat(chat_id, f"🗑️ Deleted your last expense:\n{summary}")
+
+
+def report_recent_expenses(
+    telegram_user, chat_id, period_label, *, months: int = 0, days: int = 0
+):
+    """Report the user's spendings over the window ending today.
+
+    The window starts ``months`` calendar months (or ``days`` days) before today
+    and runs to today, inclusive.
+    """
+    if telegram_user is None:
+        Bot.to_chat(chat_id, "I don't have any data for you yet.")
+        return
+
+    today = timezone.localdate()
+    start = _start_of_window(today, months=months, days=days)
+    rows = list(
+        Expense.objects.filter(
+            telegram_user=telegram_user, date__gte=start, date__lte=today
+        )
+        .values("currency", "category")
+        .annotate(total=Sum("amount"))
+        .order_by("currency", "-total")
+    )
+    if not rows:
+        Bot.to_chat(chat_id, f"You have no expenses {period_label}.")
+        return
+
+    Bot.to_chat(chat_id, format_spendings_report(rows, period_label))
+
+
+def _start_of_window(today: date, *, months: int = 0, days: int = 0) -> date:
+    """Return the inclusive start date of a window ending on ``today``."""
+    if months:
+        year, month = today.year, today.month - months
+        while month < 1:
+            month += 12
+            year -= 1
+        day = min(today.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+    return today - timedelta(days=days)
 
 
 ONBOARDING_GREETING = (
@@ -400,7 +573,7 @@ def handle_image_expense(image_url:str, text:str|None=None):
     """Parse an expense from a photo (with an optional caption) using vision."""
     prompt = "Extract the expense shown in this image."
     if text:
-        prompt += f"\nADDIONAL CONTEXT\n{text}"
+        prompt += f"\nADDIONAL CONTEXT:\n{text}"
     return get_response_to_prompt(
         prompt=prompt,
         model_id=settings.NEBIUS_VISION_MODEL_ID,

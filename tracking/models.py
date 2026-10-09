@@ -47,6 +47,9 @@ class TelegramUser(models.Model):
         default=OnboardingStep.DONE,
     )
 
+    # Set when a user has asked to delete their data and must confirm first.
+    pending_delete = models.BooleanField(default=False)
+
     def __str__(self):
         if self.username:
             return f"@{self.username}"

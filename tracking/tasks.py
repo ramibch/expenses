@@ -5,11 +5,11 @@ the amounts, e.g.::
 
     Your spendings today was:
 
-        EUR
+        EUR — 42.50
         - Dining & Cafés: 12.50
         - Groceries: 30.00
 
-        CHF
+        CHF — 45.00
         - Clothing & Shoes: 45.00
 
 Users with no spendings in the period are skipped, so nobody is messaged just
@@ -22,6 +22,8 @@ from datetime import date, timedelta
 
 from django.db.models import Sum
 from django.utils import timezone
+from huey import crontab
+from huey.contrib.djhuey import db_periodic_task
 
 from tracking.models import Expense, ExpenseCategory
 from utils.bot import Bot
@@ -29,6 +31,7 @@ from utils.bot import Bot
 logger = logging.getLogger(__name__)
 
 
+@db_periodic_task(crontab(hour="21", minute="0"))
 def task_daily_report_to_telegram_users():
     """Report to every opted-in user the spendings they made today."""
     today = timezone.localdate()
@@ -37,6 +40,7 @@ def task_daily_report_to_telegram_users():
     )
 
 
+@db_periodic_task(crontab(day_of_week="0", hour="21", minute="0"))
 def task_weekly_report_to_telegram_users():
     """Report to every opted-in user the spendings they made so far this week (from Monday)."""
     today = timezone.localdate()
@@ -46,6 +50,7 @@ def task_weekly_report_to_telegram_users():
     )
 
 
+@db_periodic_task(crontab(day="1", hour="8", minute="0"))
 def task_monthly_report_to_telegram_users():
     """Report to every opted-in user the spendings they made during the previous month."""
     first_of_this_month = timezone.localdate().replace(day=1)
@@ -101,8 +106,9 @@ def report_spendings_to_telegram_users(
 def format_spendings_report(rows, period_label: str) -> str:
     """Build the report text from aggregated ``currency``/``category``/``total`` rows.
 
-    Currencies are sorted alphabetically and, within each currency, categories
-    are ordered by descending total so the biggest spendings come first.
+    Each currency is shown with its own total. Currencies are sorted alphabetically
+    and, within each currency, categories are ordered by descending total so the
+    biggest spendings come first.
     """
     by_currency: dict[str, list[dict]] = {}
     for row in rows:
@@ -110,9 +116,11 @@ def format_spendings_report(rows, period_label: str) -> str:
 
     lines = [f"Your spendings {period_label} was:"]
     for currency in sorted(by_currency):
+        currency_rows = by_currency[currency]
+        currency_total = sum(row["total"] for row in currency_rows)
         lines.append("")
-        lines.append(f"    {currency}")
-        for row in by_currency[currency]:
+        lines.append(f"    {currency} — {currency_total:.2f}")
+        for row in currency_rows:
             label = ExpenseCategory(row["category"]).label
             lines.append(f"    - {label}: {row['total']:.2f}")
     return "\n".join(lines)

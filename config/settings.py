@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
+
+import redis
 from environs import Env
 
 # Env variables
@@ -37,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "huey.contrib.djhuey",
     "tracking",
 ]
 
@@ -176,6 +179,40 @@ TELEGRAM_BOT_URL = env.str("TELEGRAM_BOT_URL")
 # Useful urls
 DEVELOPER_CONTACT_URL = "https://ramib.ch/contact"
 REPO_CODE_URL = "https://github.com/ramibch/expenses"
+
+
+# Huey (background tasks / scheduled reports)
+# https://huey.readthedocs.io/en/latest/contrib.html#django
+HUEY_IMMEDIATE = env.bool("HUEY_IMMEDIATE", DEBUG)
+
+REDIS_HOST = env.str("REDIS_HOST", "localhost")
+REDIS_PORT = env.int("REDIS_PORT", 6379)
+REDIS_DB = env.int("REDIS_DB", 0)
+REDIS_CONNECTION_POOL = redis.ConnectionPool(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB
+)
+
+HUEY = {
+    "huey_class": "huey.RedisHuey",  # Huey implementation to use.
+    "name": str(DATABASES["default"]["NAME"]),  # Use db name for huey.
+    "results": True,  # Store return values of tasks.
+    "store_none": False,  # If a task returns None, do not save to results.
+    "immediate": HUEY_IMMEDIATE,  # run synchronously.
+    "utc": True,  # Use UTC for all times internally.
+    "blocking": True,  # Perform blocking pop rather than poll Redis.
+    "connection": {"connection_pool": REDIS_CONNECTION_POOL},
+    "consumer": {
+        "workers": 4,
+        "worker_type": "thread",
+        "initial_delay": 0.1,  # Smallest polling interval, same as -d.
+        "backoff": 1.15,  # Exponential backoff using this rate, -b.
+        "max_delay": 10.0,  # Max possible polling interval, -m.
+        "scheduler_interval": 1,  # Check schedule every second, -s.
+        "periodic": True,  # Enable crontab feature.
+        "check_worker_health": True,  # Enable worker health checks.
+        "health_check_interval": 5,  # Check worker health every second.
+    },
+}
 
 
 # Public base URL (e.g. https://example.com)
