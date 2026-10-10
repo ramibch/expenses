@@ -209,14 +209,14 @@ REDIS_CONNECTION_POOL = redis.ConnectionPool(
 HUEY = {
     "huey_class": "huey.RedisHuey",  # Huey implementation to use.
     "name": str(DATABASES["default"]["NAME"]),  # Use db name for huey.
-    "results": True,  # Store return values of tasks.
+    "results": False,  # Store return values of tasks.
     "store_none": False,  # If a task returns None, do not save to results.
     "immediate": HUEY_IMMEDIATE,  # run synchronously.
     "utc": True,  # Use UTC for all times internally.
     "blocking": True,  # Perform blocking pop rather than poll Redis.
     "connection": {"connection_pool": REDIS_CONNECTION_POOL},
     "consumer": {
-        "workers": 4,
+        "workers": 1,
         "worker_type": "thread",
         "initial_delay": 0.1,  # Smallest polling interval, same as -d.
         "backoff": 1.15,  # Exponential backoff using this rate, -b.
