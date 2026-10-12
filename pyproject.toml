@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "django>=6.1.1",
+    "django>=6.1.2",
     "environs>=15.2.0",
     "gunicorn>=26.2.0",
     "huey>=3.4.0",
