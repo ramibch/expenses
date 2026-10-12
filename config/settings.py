@@ -42,7 +42,9 @@ DEBUG = env.bool("DEBUG")
 
 ALLOWED_HOSTS = [h for h in env.list("ALLOWED_HOSTS", delimiter=",") if h != ""]
 
-CSRF_TRUSTED_ORIGINS = [url for url in env.list("CSRF_TRUSTED_ORIGINS", delimiter=",") if url != ""]
+CSRF_TRUSTED_ORIGINS = [
+    url for url in env.list("CSRF_TRUSTED_ORIGINS", delimiter=",") if url != ""
+]
 
 # Application definition
 
@@ -183,7 +185,7 @@ NEBIUS_TEXT_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 NEBIUS_VISION_MODEL_ID = "openbmb/MiniCPM-V-4_5"
 
 
-# telegram 
+# telegram
 TELEGRAM_BOT_API_KEY = env.str("TELEGRAM_BOT_API_KEY")
 # Random string sent by Telegram in the X-Telegram-Bot-Api-Secret-Token header
 TELEGRAM_WEBHOOK_SECRET_TOKEN = env.str("TELEGRAM_WEBHOOK_SECRET_TOKEN")
@@ -242,7 +244,7 @@ HTTPS = env.bool("HTTPS")
 
 if HTTPS:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_HSTS_SECONDS = 31_536_000 
+    SECURE_HSTS_SECONDS = 31_536_000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True

@@ -48,9 +48,12 @@ def get_response_to_prompt(
     client = get_ai_client()
 
     if image_url:
-        content: str | list[
-            ChatCompletionContentPartTextParam | ChatCompletionContentPartImageParam
-        ] = [
+        content: (
+            str
+            | list[
+                ChatCompletionContentPartTextParam | ChatCompletionContentPartImageParam
+            ]
+        ) = [
             ChatCompletionContentPartTextParam(type="text", text=prompt),
             ChatCompletionContentPartImageParam(
                 type="image_url", image_url={"url": image_url}

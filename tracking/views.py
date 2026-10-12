@@ -27,7 +27,7 @@ def telegram_webhook(request):
         update = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
         return HttpResponse(status=400)
-    
+
     handle_update(update)
 
     # Telegram only needs a 2xx to consider the update delivered.

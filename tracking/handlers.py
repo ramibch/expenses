@@ -36,7 +36,7 @@ EXPENSE_SYSTEM_PROMPT = (
     "or null when it is not stated,\n"
     '  "amount": the amount as a number, without a currency symbol (number),\n'
     '  "currency": the ISO 4217 code of the currency stated in the message '
-    '(string), or null when the message does not state a currency. Never guess '
+    "(string), or null when the message does not state a currency. Never guess "
     "or infer a currency,\n"
     '  "category": exactly one of the allowed values below, as a string '
     '(use "other" if none fit).\n'
@@ -203,9 +203,7 @@ def handle_user_command(cmd, chat_id, message, telegram_user=None):
                 telegram_user, chat_id, "in the last 30 days", days=30
             )
         case "/expenses7d":
-            report_recent_expenses(
-                telegram_user, chat_id, "in the last 7 days", days=7
-            )
+            report_recent_expenses(telegram_user, chat_id, "in the last 7 days", days=7)
 
 
 # Cap the number of expenses listed so the message stays within Telegram's limit.
@@ -291,7 +289,7 @@ def delete_last_expense(telegram_user, chat_id):
         return
 
     expense = Expense.objects.filter(telegram_user=telegram_user).order_by("id").last()
-    
+
     if expense is None:
         Bot.to_chat(chat_id, "You have no expenses to delete.")
         return
@@ -449,7 +447,7 @@ def _onboarding_summary(telegram_user: TelegramUser) -> str:
     return (
         f"✅ All set! Default currency: {telegram_user.default_currency}. {reports}\n\n"
         'Send me an expense any time, e.g. "coffee 3.5".'
-        'You can also just send a photo of your ticket!'
+        "You can also just send a photo of your ticket!"
     )
 
 
@@ -510,10 +508,13 @@ def _reply_with_expense(update, telegram_user, parse_expense, *args):
             )
         else:
             logger.warning("Message has no 'from' user; expense not saved: %r", message)
-        
+
     except openai.AuthenticationError:
         logger.exception("Nebius authentication failed - check NEBIUS_API_KEY")
-        Bot.to_chat(chat_id, f"I can't read expenses right now. Contact my developer: {settings.DEVELOPER_CONTACT_URL}")
+        Bot.to_chat(
+            chat_id,
+            f"I can't read expenses right now. Contact my developer: {settings.DEVELOPER_CONTACT_URL}",
+        )
         return
     except Exception:
         logger.exception("Could not parse an expense for chat %s", chat_id)
@@ -634,7 +635,7 @@ def handle_text_expense(text):
     )
 
 
-def handle_image_expense(image_url:str, text:str|None=None):
+def handle_image_expense(image_url: str, text: str | None = None):
     """Parse an expense from a photo (with an optional caption) using vision."""
     prompt = "Extract the expense shown in this image."
     if text:

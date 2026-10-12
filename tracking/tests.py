@@ -99,12 +99,16 @@ class TelegramWebhookTests(TestCase):
         self.assertIn("Coffee", message)
 
     @patch("tracking.handlers.Bot.to_chat")
-    @patch("tracking.handlers.get_response_to_prompt", side_effect=ValueError("bad json"))
+    @patch(
+        "tracking.handlers.get_response_to_prompt", side_effect=ValueError("bad json")
+    )
     def test_unparseable_text_is_not_saved(self, get_response, to_chat):
         self._post("coffee 3.5")
 
         self.assertEqual(Expense.objects.count(), 0)
-        to_chat.assert_called_once_with(42, "Sorry, I couldn't read that as an expense.")
+        to_chat.assert_called_once_with(
+            42, "Sorry, I couldn't read that as an expense."
+        )
 
     @patch("tracking.handlers.Bot.to_chat")
     @patch("tracking.handlers.get_response_to_prompt")
@@ -119,7 +123,9 @@ class TelegramWebhookTests(TestCase):
         self._post("coffee 3.5")
 
         self.assertEqual(Expense.objects.count(), 0)
-        to_chat.assert_called_once_with(42, "Sorry, I couldn't read that as an expense.")
+        to_chat.assert_called_once_with(
+            42, "Sorry, I couldn't read that as an expense."
+        )
 
     @patch("tracking.handlers.Bot.to_chat")
     @patch("tracking.handlers.get_response_to_prompt")
@@ -208,7 +214,12 @@ class CleanExpenseTests(TestCase):
 
     def test_normalises_fields(self):
         cleaned = _clean_expense(
-            {"name": " Coffee ", "amount": "3.5", "currency": "eur", "category": "dining"}
+            {
+                "name": " Coffee ",
+                "amount": "3.5",
+                "currency": "eur",
+                "category": "dining",
+            }
         )
 
         self.assertEqual(cleaned["name"], "Coffee")
@@ -319,12 +330,13 @@ class PhotoDataUrlTests(TestCase):
     def test_builds_data_url_from_largest_photo(self, get_file, download_file):
         url = photo_data_url({"photo": [{"file_id": "a"}, {"file_id": "b"}]})
 
-        self.assertEqual(url, "data:image/jpeg;base64," + base64.b64encode(b"abc").decode())
+        self.assertEqual(
+            url, "data:image/jpeg;base64," + base64.b64encode(b"abc").decode()
+        )
         get_file.assert_called_once_with("b")
 
     def test_no_photo_returns_none(self):
         self.assertIsNone(photo_data_url({}))
-
 
 
 class SpendingsReportTests(TestCase):
@@ -437,7 +449,7 @@ class SpendingsReportTests(TestCase):
 
     @patch("tracking.tasks.Bot.to_chat")
     def test_monthly_report_skips_users_who_opted_out(self, to_chat):
-        last_month = (timezone.localdate().replace(day=1) - timedelta(days=1))
+        last_month = timezone.localdate().replace(day=1) - timedelta(days=1)
         self.user.monthly_report = False
         self.user.save(update_fields=["monthly_report"])
         self._expense(self.user, 7, day=last_month)
@@ -588,7 +600,9 @@ class OnboardingTests(TestCase):
 
     @patch("tracking.handlers.Bot.to_chat")
     @patch("tracking.handlers.get_response_to_prompt")
-    def test_expense_is_not_processed_before_onboarding_done(self, get_response, to_chat):
+    def test_expense_is_not_processed_before_onboarding_done(
+        self, get_response, to_chat
+    ):
         # A user still in onboarding: the message advances onboarding instead of
         # being parsed as an expense.
         TelegramUser.objects.create(id=42, onboarding_step=OnboardingStep.CURRENCY)
