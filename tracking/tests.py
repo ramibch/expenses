@@ -1,6 +1,7 @@
 import base64
 import json
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import openai
@@ -11,6 +12,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from tracking.handlers import (
+    NOT_AN_EXPENSE_REPLY,
+    NotAnExpense,
     _clean_expense,
     _looks_like_expense,
     handle_text_expense,
@@ -24,6 +27,7 @@ from tracking.tasks import (
     task_monthly_report_to_telegram_users,
     task_weekly_report_to_telegram_users,
 )
+from utils.ai import extract_json, get_response_to_prompt
 
 SENDER = {
     "id": 42,
@@ -109,6 +113,24 @@ class TelegramWebhookTests(TestCase):
         to_chat.assert_called_once_with(
             42, "Sorry, I couldn't read that as an expense."
         )
+
+    @patch("tracking.handlers.Bot.to_chat")
+    @patch("tracking.handlers.get_response_to_prompt")
+    def test_non_expense_reply_is_not_saved(self, get_response, to_chat):
+        # The prompt asks the model to signal "not an expense" as amount 0.0
+        # with a null currency.
+        get_response.return_value = {
+            "name": "",
+            "date": None,
+            "amount": 0.0,
+            "currency": None,
+            "category": "other",
+        }
+
+        self._post("hello there 2")
+
+        self.assertEqual(Expense.objects.count(), 0)
+        to_chat.assert_called_once_with(42, NOT_AN_EXPENSE_REPLY)
 
     @patch("tracking.handlers.Bot.to_chat")
     @patch("tracking.handlers.get_response_to_prompt")
@@ -250,6 +272,94 @@ class CleanExpenseTests(TestCase):
     def test_missing_amount_raises(self):
         with self.assertRaises(ValueError):
             _clean_expense({"name": "X", "currency": "EUR", "category": "dining"})
+
+    def test_zero_amount_without_currency_is_not_an_expense(self):
+        # Even with a default currency configured, the not-an-expense signal must
+        # not be turned into a saved zero-amount expense.
+        with self.assertRaises(NotAnExpense):
+            _clean_expense(
+                {"name": "", "amount": 0.0, "currency": None},
+                default_currency="CHF",
+            )
+
+
+def _completion(content):
+    """A minimal stand-in for an OpenAI chat completion response."""
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+class ExtractJsonTests(TestCase):
+    def test_parses_a_plain_object(self):
+        self.assertEqual(extract_json('{"a": 1}'), {"a": 1})
+
+    def test_strips_a_markdown_fence(self):
+        self.assertEqual(extract_json('```json\n{"a": 1}\n```'), {"a": 1})
+
+    def test_ignores_surrounding_prose(self):
+        self.assertEqual(extract_json('Here you go: {"a": 1}'), {"a": 1})
+
+    def test_raises_when_there_is_no_json(self):
+        with self.assertRaises(json.JSONDecodeError):
+            extract_json("sorry, no idea")
+
+
+class GetResponseToPromptTests(TestCase):
+    @patch("utils.ai.get_ai_client")
+    def test_parses_json_and_requests_json_object(self, get_ai_client):
+        create = get_ai_client.return_value.chat.completions.create
+        create.return_value = _completion('{"a": 1}')
+
+        result = get_response_to_prompt("hi", model_id="m")
+
+        self.assertEqual(result, {"a": 1})
+        kwargs = create.call_args.kwargs
+        self.assertEqual(kwargs["model"], "m")
+        self.assertEqual(kwargs["temperature"], 0)
+        self.assertEqual(kwargs["response_format"], {"type": "json_object"})
+
+    @patch("utils.ai.get_ai_client")
+    def test_retries_with_the_fallback_model(self, get_ai_client):
+        create = get_ai_client.return_value.chat.completions.create
+        create.side_effect = [_completion("not json"), _completion('{"a": 2}')]
+
+        result = get_response_to_prompt(
+            "hi", model_id="fast", fallback_model_id="strong"
+        )
+
+        self.assertEqual(result, {"a": 2})
+        self.assertEqual(
+            [call.kwargs["model"] for call in create.call_args_list],
+            ["fast", "strong"],
+        )
+
+    @patch("utils.ai.get_ai_client")
+    def test_raises_after_all_attempts_fail(self, get_ai_client):
+        create = get_ai_client.return_value.chat.completions.create
+        create.side_effect = [_completion("nope"), _completion("still nope")]
+
+        with self.assertRaises(json.JSONDecodeError):
+            get_response_to_prompt("hi", model_id="fast", fallback_model_id="strong")
+
+    @patch("utils.ai.get_ai_client")
+    def test_retries_without_response_format_when_rejected(self, get_ai_client):
+        create = get_ai_client.return_value.chat.completions.create
+        create.side_effect = [
+            openai.BadRequestError(
+                "unsupported",
+                response=MagicMock(status_code=400, request=MagicMock()),
+                body=None,
+            ),
+            _completion('{"a": 3}'),
+        ]
+
+        result = get_response_to_prompt("hi", model_id="m")
+
+        self.assertEqual(result, {"a": 3})
+        first, second = create.call_args_list
+        self.assertIn("response_format", first.kwargs)
+        self.assertNotIn("response_format", second.kwargs)
 
 
 class PhotoExpenseTests(TestCase):

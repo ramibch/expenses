@@ -26,6 +26,15 @@ from utils.timing import start_timer, stop_timer, timed
 logger = logging.getLogger(__name__)
 
 
+class NotAnExpense(Exception):
+    """The model reported that the message does not describe an expense."""
+
+
+NOT_AN_EXPENSE_REPLY = (
+    'That doesn\'t look like an expense. Send something like "coffee 3.5".'
+)
+
+
 EXPENSE_SYSTEM_PROMPT = (
     "You extract a single expense from the user's message.\n"
     "Reply with one JSON object and nothing else: no markdown, no code fences, "
@@ -42,6 +51,8 @@ EXPENSE_SYSTEM_PROMPT = (
     '(use "other" if none fit).\n'
     f"Today date is {date.today().isoformat()} (ISO 8601, YYYY-MM-DD).\n"
     f"Allowed category values: {', '.join(ExpenseCategory.values)}.\n"
+    "If the message does not describe an expense at all, still reply with the "
+    'same keys but set "amount" to 0.0 and "currency" to null.\n'
     'Example: {"name": "Coffee", "date": "2026-10-08", "amount": 3.5, '
     '"currency": "EUR", "category": "dining"}\n'
     'Example with no stated currency: {"name": "Coffee", "date": null, '
@@ -509,6 +520,10 @@ def _reply_with_expense(update, telegram_user, parse_expense, *args):
         else:
             logger.warning("Message has no 'from' user; expense not saved: %r", message)
 
+    except NotAnExpense:
+        logger.info("Message is not an expense for chat %s", chat_id)
+        Bot.to_chat(chat_id, NOT_AN_EXPENSE_REPLY)
+        return
     except openai.AuthenticationError:
         logger.exception("Nebius authentication failed - check NEBIUS_API_KEY")
         Bot.to_chat(
@@ -531,19 +546,27 @@ def _clean_expense(data: dict, default_currency: str | None = None) -> dict:
     """Validate the model's JSON and normalise it to Expense field values.
 
     ``default_currency`` is used when the model does not produce a usable
-    currency code. Raises ValueError when a required field is missing or
-    malformed, so only valid expenses are stored.
+    currency code. Raises :class:`NotAnExpense` when the model reports that the
+    message is not an expense, and ``ValueError`` when a required field is
+    missing or malformed, so only valid expenses are stored.
     """
-    name = str(data.get("name") or "").strip()
-    if not name:
-        raise ValueError("missing expense name")
-
     try:
         amount = float(data["amount"])
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("invalid expense amount") from exc
 
     currency = str(data.get("currency") or "").strip().upper()
+
+    # The model reports a non-expense as amount 0.0 with a null currency. That
+    # is a valid answer rather than a malformed one, so it gets its own signal
+    # and is checked before the default-currency fallback would kick in.
+    if amount == 0 and not currency:
+        raise NotAnExpense
+
+    name = str(data.get("name") or "").strip()
+    if not name:
+        raise ValueError("missing expense name")
+
     if (len(currency) != 3 or not currency.isalpha()) and default_currency:
         currency = default_currency.strip().upper()
     if len(currency) != 3 or not currency.isalpha():
@@ -632,6 +655,7 @@ def handle_text_expense(text):
         model_id=settings.NEBIUS_TEXT_MODEL_ID,
         system_prompt=EXPENSE_SYSTEM_PROMPT,
         return_json=True,
+        fallback_model_id=settings.NEBIUS_FALLBACK_TEXT_MODEL_ID,
     )
 
 
@@ -646,4 +670,5 @@ def handle_image_expense(image_url: str, text: str | None = None):
         image_url=image_url,
         system_prompt=EXPENSE_SYSTEM_PROMPT,
         return_json=True,
+        fallback_model_id=settings.NEBIUS_FALLBACK_VISION_MODEL_ID,
     )
