@@ -183,11 +183,11 @@ NEBIUS_API_KEY = env.str("NEBIUS_API_KEY")
 NEBIUS_TEXT_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 # Stronger model used only to retry a text expense the fast model could not
 # return as usable JSON. Kept off the happy path so normal calls stay fast.
-NEBIUS_FALLBACK_TEXT_MODEL_ID = "nvidia/nemotron-3-super-120b-a12b"
+NEBIUS_FALLBACK_TEXT_MODEL_ID = "Qwen/Qwen3-235B-A22B-Instruct-2507"
 # Vision-capable model (from the list above) used to read expense photos
 NEBIUS_VISION_MODEL_ID = "openbmb/MiniCPM-V-4_5"
 # Retried when the vision model returns a reply that is not usable JSON.
-NEBIUS_FALLBACK_VISION_MODEL_ID = "openbmb/MiniCPM-V-4_5"
+NEBIUS_FALLBACK_VISION_MODEL_ID = "Qwen/Qwen3.8-27B"
 
 
 # telegram
