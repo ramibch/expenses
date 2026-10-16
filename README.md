@@ -189,9 +189,7 @@ uv run python manage.py test tracking
 
 - **Event:** Nebius x NVIDIA Global AI Hackathon
 - **Track:** Best Apps and Agents
-- **Demo video (≤ 3 min):** <!-- TODO: YouTube link -->
-- **Live demo:** <!-- TODO: hosted URL -->
-- **Builder feedback:** <!-- TODO: link/paste your Token Factory + NVIDIA feedback -->
+- **Demo video (≤ 3 min):** [https://www.youtube.com/watch?v=Ct82FcUELHU](https://www.youtube.com/watch?v=Ct82FcUELHU)
 
 ## License
 
