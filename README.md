@@ -41,7 +41,7 @@ and uses an **NVIDIA open source model**:
 | Purpose | Model | Config |
 | --- | --- | --- |
 | Text expenses | [`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`](https://huggingface.co/nvidia) (Nemotron) | `NEBIUS_TEXT_MODEL_ID` |
-| Receipt photos | `openbmb/MiniCPM-V-4_5` (vision) | `NEBIUS_VISION_MODEL_ID` |
+| Receipt photos | [`nvidia/Nemotron-3.5-Super-VL`](https://huggingface.co/nvidia) (vision) | `NEBIUS_VISION_MODEL_ID` |
 
 Why Nemotron Nano via Token Factory: expense extraction is a high-frequency,
 low-latency task. A fast, cheap open model keeps the bot responsive and keeps API
